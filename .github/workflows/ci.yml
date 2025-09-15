@@ -56,7 +56,7 @@ jobs:
 
       # ---------- tfsec (IaC security scan) ----------
       - name: tfsec scan
-        uses: aquasecurity/tfsec-action@v1.0.8
+        uses: aquasecurity/tfsec-action@v1
         with:
           working_directory: infra/terraform
           format: sarif
