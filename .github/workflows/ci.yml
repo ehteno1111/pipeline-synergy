@@ -4,7 +4,6 @@ on:
   push:
   pull_request:
 
-# needed so SARIF uploads land in "Security > Code scanning alerts"
 permissions:
   contents: read
   actions: read
@@ -17,20 +16,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # avoid backend errors; init providers/modules without touching any state
       - name: Terraform init (no backend)
         run: terraform init -backend=false
         working-directory: infra/terraform
 
-      # ---------- tfsec (IaC security scan) ----------
-      # use stable major tag (v1) — not v1.0.8
-      - name: tfsec scan
-        uses: aquasecurity/tfsec-action@v1
+      - name: tfsec SARIF
+        uses: aquasecurity/tfsec-sarif-action@v0.1.4
         with:
           working_directory: infra/terraform
-          args: --format sarif --out tfsec.sarif
+          sarif_file: tfsec.sarif
+          tfsec_args: --exclude-downloaded-modules
 
-      # upload SARIF so findings show in the repo's Code Scanning UI
       - name: Upload tfsec SARIF to Code Scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
