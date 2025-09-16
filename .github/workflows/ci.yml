@@ -4,6 +4,7 @@ on:
   push:
   pull_request:
 
+# Needed so SARIF uploads appear in "Security > Code scanning alerts"
 permissions:
   contents: read
   actions: read
@@ -12,21 +13,58 @@ permissions:
 jobs:
   tfsec:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Install Terraform so 'terraform init' works reliably
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      # Detect where your Terraform actually lives.
+      # If ./infra/terraform exists, use it; else fall back to repo root (.)
+      - name: Detect Terraform root
+        id: detect
+        shell: bash
+        run: |
+          if [ -d "infra/terraform" ]; then
+            echo "TF_ROOT=infra/terraform" >> "$GITHUB_ENV"
+            echo "Detected Terraform root: infra/terraform"
+          else
+            echo "TF_ROOT=." >> "$GITHUB_ENV"
+            echo "Detected Terraform root: . (repo root)"
+          fi
+
+      # (Optional) Show what files are present — helps if anything fails
+      - name: Show tree (debug)
+        run: |
+          echo "TF_ROOT=${TF_ROOT}"
+          pwd
+          ls -la
+          echo "----"
+          ls -la infra || true
+          ls -la infra/terraform || true
+
+      # Initialize providers/modules without touching backend/state
       - name: Terraform init (no backend)
         run: terraform init -backend=false
-        working-directory: infra/terraform
+        working-directory: ${{ env.TF_ROOT }}
 
+      # Run tfsec and produce a SARIF file
       - name: tfsec SARIF
         uses: aquasecurity/tfsec-sarif-action@v0.1.4
         with:
-          working_directory: infra/terraform
+          # Scan the detected folder
+          working_directory: ${{ env.TF_ROOT }}
+          # Output SARIF filename
           sarif_file: tfsec.sarif
+          # Avoid re-scanning downloaded modules (speeds up CI)
           tfsec_args: --exclude-downloaded-modules
 
+      # Upload SARIF to GitHub Code Scanning
       - name: Upload tfsec SARIF to Code Scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
